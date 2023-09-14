@@ -1,0 +1,259 @@
+---
+title: "swimteam_proj"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyr)
+library(readr)
+library(dplyr)
+library(lubridate)
+library(anytime)
+library(ggplot2)
+library(reshape2)
+```
+
+```{r}
+swim <- read_csv("CleanedSwim.csv")
+swim$Timestamp <- anydate(swim$Timestamp)
+head(swim)
+```
+
+```{r}
+swim$week <- format(swim$Timestamp, "%U")
+
+swim$week <- as.numeric(swim$week)
+
+swim <- swim %>% 
+  mutate(week = week - 41)
+
+swim <- swim %>% 
+  mutate(week = if_else(week < 0, week + 49, week))
+```
+
+#mess of a graph
+```{r}
+#swim_oneperson <- swim %>% 
+#  filter(Email == 6)
+#swim_oneperson <- swim_oneperson[c(5, 7, 26)]
+#
+#d <- melt(swim_oneperson, id.vars="week")
+#
+#ggplot(data=d, aes(week, value)) +
+# geom_point(aes(color = variable))
+
+```
+
+#PARTICIPATION FUNCTIONS
+```{r}
+#Shoulderarm
+swim$shoulder_arm_participate[swim$shoulder_arm_participate == 'Full participation without shoulder/arm problems'] <- 0
+swim$shoulder_arm_participate[swim$shoulder_arm_participate == 'Full participation, but with shoulder/arm problems'] <- 8
+swim$shoulder_arm_participate[swim$shoulder_arm_participate == 'Reduced participation due to shoulder/arm problems'] <- 17
+swim$shoulder_arm_participate[swim$shoulder_arm_participate == 'Cannot participate due to shoulder/arm problems'] <- 25
+```
+
+```{r}
+#backneck
+swim$backneck_participate[swim$backneck_participate == 'Full participation without neck/mid back problems'] <- 0
+swim$backneck_participate[swim$backneck_participate == 'Full participation, but with neck/mid back problems'] <- 8
+swim$backneck_participate[swim$backneck_participate == 'Reduced participation due to neck/mid back problems'] <- 17
+swim$backneck_participate[swim$backneck_participate == 'Cannot participate due to neck/mid back problems'] <- 25
+```
+
+```{r}
+#lowback
+swim$lowback_participate[swim$lowback_participate == 'Full participation without low back problems'] <- 0
+swim$lowback_participate[swim$lowback_participate == 'Full participation, but with low back problems'] <- 8
+swim$lowback_participate[swim$lowback_participate == 'Reduced participation due to low back problems'] <- 17
+swim$lowback_participate[swim$lowback_participate == 'Cannot participate due to low back problems'] <- 25
+```
+
+```{r}
+#hip
+swim$hip_participate[swim$hip_participate == 'Full participation without hip/pelvis problems'] <- 0
+swim$hip_participate[swim$hip_participate == 'Full participation, but with hip/pelvis problems'] <- 8
+swim$hip_participate[swim$hip_participate == 'Reduced participation due to hip/pelvis problems'] <- 17
+swim$hip_participate[swim$hip_participate == 'Cannot participate due to hip/pelvis problems'] <- 25
+```
+
+```{r}
+swim$shoulder_arm_participate <- as.numeric(swim$shoulder_arm_participate)
+swim$backneck_participate <- as.numeric(swim$backneck_participate)
+swim$lowback_participate <- as.numeric(swim$lowback_participate)
+swim$hip_participate <- as.numeric(swim$hip_participate)
+```
+
+
+
+#REDUCTION FUNCTION
+```{r}
+helperFunction_red <- function(x){
+  swim <- swim %>%
+      mutate({{x}} := if_else(swim[[x]] == "No reduction", 0, if_else(swim[[x]] == 'To a minor extent', 6, if_else(swim[,x] == 'To a moderate extent', 12,if_else(swim[,x] == "To a major extent", 18, 25)))))
+    return(swim)
+    
+}
+```
+
+```{r}
+swim <- helperFunction_red('shoulder_arm_reduction')
+swim <- helperFunction_red('backneck_reduction')
+swim <- helperFunction_red('lowback_reduction')
+swim <- helperFunction_red('hip_reduction')
+```
+
+#PERFORMANCE EFFORANT FUNCTION
+```{r}
+helperFunction_pe <- function(x){
+  swim <- swim %>%
+      mutate({{x}} := if_else(swim[,x] == "No effect", 0, if_else(swim[,x] == 'To a minor extent', 6, if_else(swim[,x] == 'To a moderate extent', 12,if_else(swim[,x] == "To a major extent", 18, 25)))))
+    return(swim)
+    
+}
+```
+
+```{r}
+swim <- helperFunction_pe('shoulder_arm_performeff')
+swim <- helperFunction_pe('backneck_performeff')
+swim <- helperFunction_pe('lowback_performeff')
+swim <- helperFunction_pe('hip_performeff')
+```
+
+#PAIN FUNCTION
+```{r}
+helperFunction_pain <- function(x){
+  swim <- swim %>%
+      mutate({{x}} := if_else(swim[[x]] == "No pain", 0, if_else(swim[[x]] == 'Mild pain', 8, if_else(swim[,x] == 'Moderate pain', 17, 25))))
+    return(swim)
+    
+}
+```
+
+```{r}
+swim <- helperFunction_pain('shoulder_arm_pain')
+swim <- helperFunction_pain('backneck_pain')
+swim <- helperFunction_pain('lowback_pain')
+swim <- helperFunction_pain('hip_pain')
+```
+
+
+
+#COMBINE PAIN INDEX
+#CREATE A DIFFERNCE OF EXPECTED SWIM YARDS
+
+```{r}
+swim <- swim %>%
+  mutate(total_pain = shoulder_arm_pain + backneck_pain + lowback_pain + hip_pain,
+         target_actual_dif = actual_swim_yards - target_swim_yards) %>% 
+  relocate(target_actual_dif, .after = actual_swim_yards)
+```
+
+```{r}
+#write.csv(swim, 'swim_for_shiny.csv')
+```
+
+```{r}
+swim_individual <- swim %>% 
+    filter(Email == 24)
+
+target <- paste("Target", swim_individual$Email[1], ".png", sep = "")
+target
+```
+
+
+#TARGET VS ACTUAL plots
+```{r}
+swim_individual <- swim %>%  
+    filter(Email == 13)
+
+```
+
+```{r}
+ggplot(swim_individual, aes(x= week, y= target_actual_dif)) + 
+  geom_hline(yintercept=0, linetype="dashed", color = "red") + 
+  geom_path() + 
+  geom_point(size = 3, color = 'dark blue') + 
+  scale_y_continuous(limits = c(-30000, 30000)) + 
+  scale_x_continuous(breaks = seq(1,15,by=1), limits = c(0,16)) +
+  theme(panel.grid.minor.x = element_blank()) +
+  theme_bw() +
+  labs(y = "actual yards swam above (or below) target ",
+       title = "Target vs Actual",
+       subtitle = "more than 0 = over target, less than 0 = under target")
+
+  
+#target <- paste("Target", swim_individual$Email[1], ".png", sep = "")
+#ggsave(target) 
+```
+
+
+#pain index plots
+```{r}
+indpain <- swim[c(2,13, 17, 21, 25, 26, 27)]
+
+indpain <- pivot_longer(indpain, cols= shoulder_arm_pain:hip_pain, names_to = 'paintype', values_to = 'painval')
+
+```
+
+```{r}
+#write.csv(indpain, 'swim_for_shiny_pain.csv')
+```
+
+```{r}
+
+pain_graph <- ggplot(indpain, aes(x= week, y= painval, label = sum(painval ))) + 
+  geom_col(aes(fill = paintype), width = 0.85, position = 'stack') +
+  scale_x_continuous(breaks = seq(1, 16, by=2), limits = c(0,16))
+  #geom_text(aes(label = painval), size = 3, hjust = 0.5, vjust = 3, position = "stack") 
+
+pain_graph
+
+#pain <- paste("Pain", swim_individual$Email[1], ".png", sep = "")
+#ggsave(pain)  
+```
+
+
+```{r}
+proportion <- ggplot(indpain, aes(x=week,y=painval, group=paintype, colour=paintype)) + 
+  geom_line(size = 1.2, alpha = 0.5, position=position_jitter(w=0.4, h=0.3))
+proportion
+```
+
+
+
+#week checking
+```{r}
+check <- swim %>% 
+  select(Timestamp, week, Email) %>% 
+  arrange(Email)
+check
+```
+
+#Modeling...
+```{r}
+model1 <- lm(shoulder_arm_pain~shoulder_arm_participate+shoulder_arm_reduction+shoulder_arm_performeff, data = swim)
+summary(model1)
+```
+
+#work on linear models for pain compared to Q1-3
+#see what pain levels do to the other questions level
+
+#models of effort
+#models on target vs actual
+
+#update graph and add total of q1-3
+
+
+#APRIL 13
+
+#graphs on one pane
+#change values of no reports (signify no report)
+#simplify
+#create info on weeks of no response
+
+#trend for whole team
